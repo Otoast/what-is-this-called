@@ -16,7 +16,7 @@ from collections import deque
 # CONFIGURATION
 # --------------------------------------------------------------
 
-MAX_DEPTH = 5
+MAX_DEPTH = 6
 ENDGAME_COMPONENT_MULTIPLIER = 1000
 ENDGAME_EXHAUSTIVE_THRESHOLD = 20  # Switch to full search if few cells left
 
