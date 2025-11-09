@@ -4,6 +4,10 @@ from flask import Flask, request, jsonify
 from threading import Lock
 from collections import deque
 
+import math
+import agent_logic
+import copy
+
 from case_closed_game import Game, Direction, GameResult
 
 # Flask API server setup
@@ -14,8 +18,8 @@ LAST_POSTED_STATE = {}
 
 game_lock = Lock()
  
-PARTICIPANT = "ParticipantX"
-AGENT_NAME = "AgentX"
+PARTICIPANT = "DaPunisher"
+AGENT_NAME = "HurtPeopleHurtPeople"
 
 
 @app.route("/", methods=["GET"])
@@ -89,24 +93,51 @@ def send_move():
     and :BOOST is optional to use a speed boost (move twice)
     """
     player_number = request.args.get("player_number", default=1, type=int)
-
     with game_lock:
         state = dict(LAST_POSTED_STATE)   
         my_agent = GLOBAL_GAME.agent1 if player_number == 1 else GLOBAL_GAME.agent2
-        boosts_remaining = my_agent.boosts_remaining
-   
-    # -----------------your code here-------------------
-    # Simple example: always go RIGHT (replace this with your logic)
-    # To use a boost: move = "RIGHT:BOOST"
-    move = "RIGHT"
-    
-    # Example: Use boost if available and it's late in the game
-    # turn_count = state.get("turn_count", 0)
-    # if boosts_remaining > 0 and turn_count > 50:
-    #     move = "RIGHT:BOOST"
-    # -----------------end code here--------------------
+        opponent_agent = GLOBAL_GAME.agent2 if player_number == 1 else GLOBAL_GAME.agent1
+        my_color = 'R' if player_number == 1 else 'B'
+        opponent_color = 'B' if player_number == 1 else 'R'
 
-    return jsonify({"move": move}), 200
+        boosts_remaining = my_agent.boosts_remaining
+        opponent_boosts_remaining = opponent_agent.boosts_remaining
+
+    converted_board = agent_logic._convert_board(state)
+
+    best_value = -math.inf
+    best_move = None
+
+    for move_name, direction in agent_logic.MOVES.items():
+        my_head = my_agent.trail[-1]
+        opponent_head = opponent_agent.trail[-1]
+        print(f"Trying move: {move_name}")
+
+        # Skip boost if you have no boosts left
+        if ":BOOST" in move_name and boosts_remaining <= 0:
+            print("Skipping boost (no boosts left)")
+            continue
+
+        # attempt_move now handles both normal and boost moves correctly
+        new_grid, my_new_head = agent_logic.attempt_move(converted_board, my_head, my_color, direction)
+        if my_new_head is None:
+            print("Invalid move")
+            continue
+
+        new_my_boosts_remaining = boosts_remaining - 1 if ":BOOST" in move_name else boosts_remaining
+
+        value = agent_logic.minimax(
+            new_grid, my_new_head, opponent_head, my_color, opponent_color,
+            depth=1, alpha=-math.inf, beta=math.inf, maximizing=False,
+            red_boosts_remaining=new_my_boosts_remaining, blue_boosts_remaining=opponent_boosts_remaining
+        )
+
+        if value > best_value:
+            best_value = value
+            best_move = move_name
+
+    print(f"Selected move: {best_move}")
+    return jsonify({"move": best_move}), 200
 
 
 @app.route("/end", methods=["POST"])
